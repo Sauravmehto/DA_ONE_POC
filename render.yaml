@@ -5,10 +5,8 @@ services:
     runtime: docker
     plan: free
     dockerContext: ./backend
-    dockerfilePath: ./docker/backend.Dockerfile
+    dockerfilePath: ./backend/Dockerfile
     healthCheckPath: /health
-    # One worker: SESSION_BACKEND=memory keeps a session in a single process.
-    dockerCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1 --no-proxy-headers
     envVars:
       - key: SESSION_BACKEND
         value: memory

@@ -27,8 +27,8 @@ stays as `docker-compose.prod.yml` describes.
 
 ## Behaviour
 
-- **API** — Render runs `docker/backend.Dockerfile` (prod stage) with the start
-  command overridden to one worker on `$PORT`. `/health` is the health check.
+- **API** — Render builds `backend/Dockerfile` (the prod stage of `docker/backend.Dockerfile`, with the start
+  command fixed to one worker on `$PORT`). `/health` is the health check.
 - **UI** — Netlify builds `frontend/` with pnpm and serves `dist/`, with an
   SPA fallback to `index.html`.
 - **Secrets** — only in the Render dashboard (`sync: false` in `render.yaml`).
