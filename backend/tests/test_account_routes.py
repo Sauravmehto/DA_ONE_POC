@@ -243,7 +243,9 @@ def test_without_confirmation_signing_up_signs_you_straight_in(plain, monkeypatc
     assert sent == [], "no confirmation email is sent"
     me = plain.get("/api/v1/auth/me").json()
     assert me["email"] == "new@example.com" and me["display_name"] == "New Person"
-    assert me["is_admin"] is False
+    # Nobody else exists, so the first account is the administrator (spec 0010).
+    assert me["is_admin"] is True
+    assert me["trial"] is None
 
 
 def test_without_confirmation_an_unconfirmed_account_can_sign_in(plain):
@@ -269,6 +271,7 @@ def test_capabilities_say_whether_a_confirmation_step_exists(client, monkeypatch
 def test_without_confirmation_admin_emails_does_not_make_an_administrator(plain, monkeypatch):
     """The point of the rule: with nothing proving an address, listing it in
     ADMIN_EMAILS must not let whoever signs up with it take over."""
+    accounts.create_account("first@example.com", PASSWORD)  # takes the first-account slot
     monkeypatch.setattr(settings, "ADMIN_EMAILS", ["boss@example.com"])
     plain.post("/api/v1/auth/signup", json={
         "email": "boss@example.com", "password": PASSWORD, "display_name": "Not The Boss"})
@@ -590,3 +593,73 @@ def test_an_expired_link_asks_to_connect_again(fresh_accounts):
                           auth_mode="password", user_id=ana.user_id)
     with pytest.raises(SnowflakeNotLinked, match="expired"):
         asyncio.run(service.restore_linked(session))
+
+
+# --- free trial (spec 0010) ---------------------------------------------------
+
+def _sign_up(client, email, name="Some Person"):
+    return client.post("/api/v1/auth/signup", json={
+        "email": email, "password": PASSWORD, "display_name": name})
+
+
+def test_a_new_account_after_the_first_gets_a_14_day_trial(plain):
+    accounts.create_account("first@example.com", PASSWORD)
+    assert _sign_up(plain, "ana@example.com").json()["status"] == "signed_in"
+    me = plain.get("/api/v1/auth/me").json()
+    assert me["is_admin"] is False
+    assert me["trial"]["days_left"] == 14 and me["trial"]["expired"] is False
+
+
+def test_an_ended_trial_blocks_the_app_but_not_me_or_logout(plain):
+    from app.accounts import store
+    accounts.create_account("first@example.com", PASSWORD)
+    _sign_up(plain, "ana@example.com")
+    with store.write() as conn:
+        conn.execute("UPDATE trials SET ends_at = '2000-01-01T00:00:00+00:00'")
+    me = plain.get("/api/v1/auth/me")
+    assert me.status_code == 200 and me.json()["trial"]["expired"] is True
+    blocked = plain.get("/api/v1/agent/conversations")
+    assert blocked.status_code == 403
+    assert blocked.json()["detail"]["code"] == "trial_expired"
+    assert plain.post("/api/v1/auth/logout").status_code == 204
+
+
+def test_deleting_and_recreating_an_account_does_not_restart_the_trial(plain):
+    from app.accounts import store, trial
+    accounts.create_account("first@example.com", PASSWORD)
+    _sign_up(plain, "ana@example.com")
+    with store.write() as conn:
+        conn.execute("UPDATE trials SET ends_at = '2000-01-01T00:00:00+00:00'")
+        conn.execute("DELETE FROM users WHERE email = 'ana@example.com'")
+    plain.cookies.clear()
+    _sign_up(plain, "ana@example.com")
+    assert trial.status("ana@example.com")["expired"] is True
+
+
+def test_gmail_dots_and_plus_tags_share_one_trial():
+    from app.accounts import trial
+    assert trial.trial_key("A.n.a+x@gmail.com") == trial.trial_key("ana@googlemail.com")
+    assert trial.trial_key("a+x@corp.com") == trial.trial_key("a@corp.com")
+    assert trial.trial_key("a.b@corp.com") != trial.trial_key("ab@corp.com")
+
+
+def test_the_message_cap_stops_a_trial_account(monkeypatch):
+    from app.accounts import trial
+    monkeypatch.setattr(settings, "TRIAL_MESSAGE_CAP", 2)
+    trial.start("ana@example.com")
+    assert [trial.use_message("ana@example.com") for _ in range(3)] == [True, True, False]
+    assert trial.use_message("nobody@example.com") is True  # no trial: not limited
+
+
+def test_an_administrator_can_extend_a_trial(plain):
+    from app.accounts import store, trial
+    admin = accounts.create_account("first@example.com", PASSWORD, is_admin=True)
+    _sign_up(plain, "ana@example.com")
+    with store.write() as conn:
+        conn.execute("UPDATE trials SET ends_at = '2000-01-01T00:00:00+00:00'")
+    ana = accounts.account_by_email("ana@example.com")
+    plain.cookies.clear()
+    assert sign_in(plain, "first@example.com").status_code == 200
+    done = plain.post(f"/api/v1/users/{ana.user_id}/trial/extend", json={"days": 14})
+    assert done.status_code == 200
+    assert trial.status("ana@example.com")["expired"] is False and admin

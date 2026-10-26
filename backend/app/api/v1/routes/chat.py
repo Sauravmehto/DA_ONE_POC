@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
 from app.api.access import get_access, not_found
-from app.api.deps import get_current_session
+from app.api.deps import count_trial_message, get_current_session
 from app.engine import data_groups
 from app.core.config import settings
 from app.engine.connectors.snowflake import client as engine_client
@@ -56,6 +56,7 @@ async def chat(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="AI is not configured (missing ANTHROPIC_API_KEY).",
         )
+    await count_trial_message(session)
 
     if not access.allows([("database", body.database)]):
         raise not_found(f"Database '{body.database}' not found.")

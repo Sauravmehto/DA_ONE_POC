@@ -20,7 +20,7 @@ from app.agent.prompts import build_dashboard_system_prompt
 from app.agent.tools import ToolContext, tool_definitions
 from app.api import access as access_checks
 from app.api.access import get_access
-from app.api.deps import get_current_session, has_snowflake_link
+from app.api.deps import count_trial_message, get_current_session, has_snowflake_link
 from app.api.warehouse import run_without_snowflake, snowflake_binding
 from app.conversation import Conversation, ConversationKind, ConversationSummary
 from app.core.config import settings
@@ -231,6 +231,8 @@ async def agent_chat(
     if not message:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                             detail="Message is empty.")
+
+    await count_trial_message(session)
 
     store = request.app.state.conversation_store
 

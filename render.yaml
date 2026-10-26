@@ -10,6 +10,16 @@ services:
     envVars:
       - key: SESSION_BACKEND
         value: memory
+      # Anyone can sign up and gets a 14-day trial (spec 0010). No SMTP here,
+      # so no email confirmation; the first account becomes the administrator.
+      - key: SIGNUP_MODE
+        value: open
+      - key: EMAIL_VERIFICATION_REQUIRED
+        value: "false"
+      - key: TRIAL_DAYS
+        value: "14"
+      - key: TRIAL_MESSAGE_CAP
+        value: "50"
       - key: COOKIE_SECURE
         value: "true"
       - key: COOKIE_SAMESITE

@@ -3,6 +3,7 @@ import asyncio
 from fastapi import Depends, HTTPException, Request, status
 
 from app.accounts import service as accounts
+from app.accounts import trial
 from app.core.config import settings
 from app.engine import audit
 from app.session.base import SessionData
@@ -42,9 +43,40 @@ async def get_current_session(request: Request) -> SessionData:
                 detail="Your password was changed. Sign in again.",
             )
 
+        # A trial that has run out ends the app for this person, except the two
+        # calls the page needs to say so and let them go.
+        if not account.administrator and not request.url.path.endswith(
+            ("/auth/me", "/auth/logout")
+        ):
+            current = await asyncio.to_thread(trial.status, account.email)
+            if current and current["expired"]:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail={"message": "Your free trial has ended.", "code": "trial_expired"},
+                )
+
     # Every audit row this request writes names this login and how it signed in.
     audit.bind_session(session.session_id, session.auth_mode)
     return session
+
+
+async def count_trial_message(session: SessionData) -> None:
+    """One chat message against this person's trial allowance. Administrators
+    and accounts with no trial are never counted."""
+    if not session.user_id:
+        return
+    account = await asyncio.to_thread(accounts.get_account, session.user_id)
+    if account is None or account.administrator:
+        return
+    if not await asyncio.to_thread(trial.use_message, account.email):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "message": f"Your free trial includes {settings.TRIAL_MESSAGE_CAP} "
+                           "messages and you have used them all.",
+                "code": "trial_message_cap",
+            },
+        )
 
 
 async def session_is_admin(session: SessionData) -> bool:

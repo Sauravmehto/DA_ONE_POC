@@ -126,6 +126,18 @@ export type AuthUser = {
   email_verified: boolean
   /** The active Snowflake role may save the semantic layer and report templates. */
   can_author_snowflake: boolean
+  /** The free trial. null for administrators and accounts with no trial. */
+  trial: Trial | null
+}
+
+export interface Trial {
+  started_at: string
+  ends_at: string
+  days_left: number
+  expired: boolean
+  messages_used: number
+  /** Chat messages the trial allows; null for no limit. */
+  message_cap: number | null
 }
 
 /** What to call the signed-in person on screen. */

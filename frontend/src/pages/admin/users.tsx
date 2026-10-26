@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/contexts/auth-context"
 import {
   fetchUsers,
+  extendTrial,
   inviteUser,
   revokeInvitation,
   setUpSignIn,
@@ -272,6 +273,7 @@ export default function UsersPage() {
                 <th className="px-3 py-2 font-medium">Person</th>
                 <th className="px-3 py-2 font-medium">Signs in with</th>
                 <th className="px-3 py-2 font-medium">Last signed in</th>
+                <th className="px-3 py-2 font-medium">Trial</th>
                 <th className="px-3 py-2 font-medium">Administrator</th>
                 <th className="px-3 py-2 font-medium">Can sign in</th>
               </tr>
@@ -316,6 +318,30 @@ export default function UsersPage() {
                     ) : null}
                   </td>
                   <td className="px-3 py-2 text-xs">{when(account.last_login_at)}</td>
+                  <td className="px-3 py-2 text-xs">
+                    {account.trial ? (
+                      <div className="flex items-center gap-2">
+                        <span className={account.trial.expired ? "text-destructive" : ""}>
+                          {account.trial.expired
+                            ? "Ended"
+                            : `${account.trial.days_left} day${account.trial.days_left === 1 ? "" : "s"} left`}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 px-2 text-xs"
+                          disabled={busy}
+                          onClick={() =>
+                            void change(() => extendTrial(account.user_id, 14), "Trial extended by 14 days")
+                          }
+                        >
+                          +14 days
+                        </Button>
+                      </div>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
                   <td className="px-3 py-2">
                       <label
                         className="flex items-center gap-2 text-xs"

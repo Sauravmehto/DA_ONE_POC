@@ -55,7 +55,7 @@ export function NavUser() {
   }
 
   const displayName = userLabel(user)
-  const subtitle = user.role ?? user.email ?? user.username
+  const subtitle = user.email ?? user.role ?? user.username
   const initials = getInitials(displayName)
 
   async function handleRoleChange(role: string) {
@@ -81,8 +81,20 @@ export function NavUser() {
     }
   }
 
+  const trial = user.trial && !user.trial.expired ? user.trial : null
+
   return (
     <SidebarMenu>
+      {trial ? (
+        <SidebarMenuItem>
+          <p className="px-2 pb-1 text-xs text-muted-foreground">
+            Free trial: {trial.days_left} day{trial.days_left === 1 ? "" : "s"} left
+            {trial.message_cap
+              ? ` · ${Math.max(0, trial.message_cap - trial.messages_used)} messages left`
+              : ""}
+          </p>
+        </SidebarMenuItem>
+      ) : null}
       <SidebarMenuItem>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

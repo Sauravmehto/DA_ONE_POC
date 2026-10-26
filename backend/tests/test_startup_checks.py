@@ -32,6 +32,15 @@ def test_open_sign_up_needs_mail():
     assert with_mail.errors == []
 
 
+def test_open_sign_up_without_confirmation_is_a_warning_not_a_refusal():
+    """A demo with trials (spec 0010): no mail, so no confirmation, so open
+    sign-up starts, loudly."""
+    demo = check(_settings(SIGNUP_MODE="open", EMAIL_VERIFICATION_REQUIRED=False),
+                 any_administrator=True)
+    assert demo.errors == []
+    assert any("no email confirmation" in w for w in demo.warnings)
+
+
 def test_a_deployment_needs_its_encryption_key():
     assert check(_settings(TOKEN_ENCRYPTION_KEY=""), any_administrator=True).errors
 

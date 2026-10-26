@@ -188,16 +188,10 @@ export default function LoginPage() {
       ) : null}
 
       <div className="mt-8 border-t pt-5 text-sm text-muted-foreground">
-        {capabilities?.signup ? (
-          <>
-            No account yet?{" "}
-            <Link to="/signup" className={LINK}>
-              Create one
-            </Link>
-          </>
-        ) : (
-          "Access is provisioned by your administrator."
-        )}
+        No account yet?{" "}
+        <Link to="/signup" className={LINK}>
+          Create one
+        </Link>
       </div>
     </AuthLayout>
   )

@@ -41,7 +41,14 @@ def check(settings: Settings, *, any_administrator: bool) -> Findings:
 
     mail = bool(settings.SMTP_HOST and settings.SMTP_FROM)
     if settings.SIGNUP_MODE == "open":
-        if deployed and not mail:
+        if deployed and not mail and not settings.EMAIL_VERIFICATION_REQUIRED:
+            found.warnings.append(
+                "SIGNUP_MODE=open with no email confirmation: anyone can create an "
+                "account with any address, so trials (one per address) are only a "
+                "soft limit. Fine for a demo; set up SMTP and turn confirmation on "
+                "for anything real."
+            )
+        elif deployed and not mail:
             found.errors.append(
                 "SIGNUP_MODE=open needs SMTP_HOST and SMTP_FROM: a new account must "
                 "confirm its email, and without mail nobody ever can."

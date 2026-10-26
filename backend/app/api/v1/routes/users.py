@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from app.accounts import mailer
 from app.accounts import service as accounts
+from app.accounts import trial
 from app.api.deps import require_admin
 from app.api.v1.routes.auth import email_link
 from app.core.config import settings
@@ -106,3 +107,26 @@ async def update(user_id: str, body: UpdateAccount,
     except accounts.AccountError as exc:
         raise _error(exc) from exc
     return account.public()
+
+
+class ExtendTrial(BaseModel):
+    days: int = 14
+
+
+@router.post("/{user_id}/trial/extend")
+async def extend_trial(user_id: str, body: ExtendTrial,
+                       session: SessionData = Depends(require_admin)) -> dict:
+    """Give one person's trial more time, counted from now if it has ended."""
+    if not 1 <= body.days <= 365:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Choose between 1 and 365 days.")
+    account = await asyncio.to_thread(accounts.get_account, user_id)
+    if account is None or not account.email:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such account.")
+    current = await asyncio.to_thread(
+        trial.extend, account.email, body.days, session.snowflake_user
+    )
+    if current is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="That account is not on a trial.")
+    return {"user": account.public()}

@@ -206,6 +206,7 @@ def test_an_unconfirmed_admin_email_is_not_an_administrator(monkeypatch):
     would become the administrator."""
     monkeypatch.setattr(settings, "SIGNUP_MODE", "open")
     monkeypatch.setattr(settings, "ADMIN_EMAILS", ["boss@example.com"])
+    accounts.create_account("first@example.com", PASSWORD)  # the first-account slot
     account, token = accounts.sign_up("boss@example.com", PASSWORD, "Test Person")
     assert not account.administrator
     assert accounts.verify_email(token).administrator

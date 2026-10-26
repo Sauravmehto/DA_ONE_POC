@@ -57,7 +57,7 @@ export default function SignupPage() {
   return (
     <AccountFormShell
       title="Create your account"
-      subtitle="It takes a minute. Use your work email."
+      subtitle="Start your 14-day free trial. It takes a minute."
       footer={<AlreadyHaveAnAccount />}
     >
       {open === null ? (

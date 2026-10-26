@@ -25,6 +25,7 @@ from pydantic import BaseModel
 
 from app.accounts import mailer
 from app.accounts import service as accounts
+from app.accounts import trial
 from app.api.deps import (
     can_author_snowflake,
     get_current_session,
@@ -66,6 +67,9 @@ class UserResponse(BaseModel):
     #: Whether the active Snowflake role may save the semantic layer and report
     #: templates. False until the role is known; the builders ask for it.
     can_author_snowflake: bool = False
+    #: The free trial (spec 0010): days left, whether it has ended, and the
+    #: chat-message allowance. None for administrators and accounts with no trial.
+    trial: dict | None = None
 
 
 class SignUpResult(BaseModel):
@@ -201,6 +205,10 @@ async def _describe(session: SessionData) -> UserResponse:
         has_password=bool(account and account.has_password),
         email_verified=bool(account and account.email_verified),
         can_author_snowflake=await can_author_snowflake(session),
+        trial=(
+            await asyncio.to_thread(trial.status, account.email)
+            if account and not account.administrator else None
+        ),
     )
 
 

@@ -93,6 +93,10 @@ class Settings(BaseSettings):
     # Comma-separated or a JSON list.
     ADMIN_EMAILS: Annotated[list[str], NoDecode] = []
     PASSWORD_MIN_LENGTH: int = 10
+    #: Free trial for each email that signs itself up (spec 0010): how long it
+    #: lasts, and how many chat messages it may send (0 = no limit).
+    TRIAL_DAYS: int = 14
+    TRIAL_MESSAGE_CAP: int = 50
     INVITATION_TTL_HOURS: int = 72
     EMAIL_VERIFICATION_TTL_HOURS: int = 24
     PASSWORD_RESET_TTL_MINUTES: int = 30

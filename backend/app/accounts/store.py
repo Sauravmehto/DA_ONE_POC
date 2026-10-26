@@ -452,6 +452,20 @@ MIGRATIONS: list[str] = [
     -- adds it signs nobody out.
     ALTER TABLE users ADD COLUMN session_epoch INTEGER NOT NULL DEFAULT 0;
     """,
+    """
+    -- Free trials (spec 0010). Keyed by the email, with Gmail dots and +tags
+    -- folded out, and deliberately NOT tied to users: deleting an account must
+    -- not give its address a fresh trial. Accounts with no row here are not on
+    -- a trial at all, which is what every account made before this reads as.
+    CREATE TABLE trials (
+        trial_key      TEXT PRIMARY KEY,
+        email          TEXT NOT NULL,
+        started_at     TEXT NOT NULL,
+        ends_at        TEXT NOT NULL,
+        messages_used  INTEGER NOT NULL DEFAULT 0,
+        extended_by    TEXT
+    );
+    """,
 ]
 
 _ready_for: str | None = None

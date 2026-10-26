@@ -1,5 +1,6 @@
 import { Navigate, useLocation } from "react-router-dom"
 
+import { TrialEnded } from "@/components/trial-ended"
 import { useAuth } from "@/contexts/auth-context"
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
@@ -16,6 +17,10 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   if (!user) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />
+  }
+
+  if (user.trial?.expired) {
+    return <TrialEnded />
   }
 
   return children

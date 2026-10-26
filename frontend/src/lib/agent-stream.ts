@@ -88,7 +88,9 @@ export async function streamAgentChat(
     const text = await response.text()
     let detail = text
     try {
-      detail = (JSON.parse(text) as { detail?: string }).detail ?? text
+      const parsed = (JSON.parse(text) as { detail?: string | { message?: string } }).detail
+      // A trial limit answers with { message, code } rather than a bare string.
+      detail = (typeof parsed === "string" ? parsed : parsed?.message) ?? text
     } catch {
       // keep raw text
     }

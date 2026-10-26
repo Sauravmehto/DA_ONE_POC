@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from app.accounts import passwords, store
+from app.accounts import passwords, store, trial
 from app.core.config import settings
 
 #: Failed password attempts before an account is locked for LOCK_MINUTES.
@@ -109,6 +109,7 @@ class Account:
             "last_login_at": self.last_login_at,
             "has_password": self.has_password,
             "snowflake_user": self.snowflake_user,
+            "trial": None if self.administrator else trial.status(self.email),
         }
 
 
@@ -276,7 +277,15 @@ def sign_up(email: str, password: str, display_name: str | None = None
     # ask, because the administrator who sent it knows who it is for.
     if not _clean_name(display_name):
         raise AccountError("Enter your full name.")
-    account = create_account(email, password, display_name, email_verified=False)
+    # The first account on an empty deployment is its administrator: there is
+    # no shell on a small host to run make_admin.py, and nobody else exists to
+    # invite them. Everyone after that starts a free trial (spec 0010).
+    with store.read() as conn:
+        first = conn.execute("SELECT 1 FROM users LIMIT 1").fetchone() is None
+    account = create_account(email, password, display_name, is_admin=first,
+                             email_verified=False)
+    if not first:
+        trial.start(account.email or "")
     if not settings.EMAIL_VERIFICATION_REQUIRED:
         return account, None
     return account, start_verification(account.user_id)

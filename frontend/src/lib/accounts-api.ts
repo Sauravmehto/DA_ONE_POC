@@ -7,7 +7,7 @@
  * person should stay on the form and read why.
  */
 
-import { api, type AuthUser } from "@/lib/api"
+import { api, type AuthUser, type Trial } from "@/lib/api"
 
 const API_BASE = "/api/v1"
 
@@ -169,6 +169,8 @@ export type Account = {
   last_login_at: string | null
   has_password: boolean
   snowflake_user: string | null
+  /** null for an administrator or an account with no trial. */
+  trial: Trial | null
 }
 
 export type Invitation = {
@@ -220,5 +222,13 @@ export function updateUser(
   return api<Account>(`/users/${encodeURIComponent(userId)}`, {
     method: "PATCH",
     json: change,
+  })
+}
+
+/** Give one person's trial more time, counted from now if it has ended. */
+export function extendTrial(userId: string, days = 14): Promise<{ user: Account }> {
+  return api(`/users/${encodeURIComponent(userId)}/trial/extend`, {
+    method: "POST",
+    json: { days },
   })
 }
