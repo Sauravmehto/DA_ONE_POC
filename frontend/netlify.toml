@@ -1,5 +1,5 @@
 # Demo deployment (docs/specs/0009-free-demo-deployment.md).
-# Replace RENDER_HOST with the Render service hostname before deploying.
+# The /api proxy below targets the Render service hostname.
 
 # Netlify reads this file from the base directory, so set Base directory to
 # "frontend" in the site settings; "base" is not repeated here.
@@ -14,7 +14,7 @@
 # first-party and CORS never comes into it.
 [[redirects]]
   from = "/api/*"
-  to = "https://RENDER_HOST/api/:splat"
+  to = "https://da-one-poc.onrender.com/api/:splat"
   status = 200
   force = true
 
