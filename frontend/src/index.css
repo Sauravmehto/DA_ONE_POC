@@ -1,0 +1,501 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/inter";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+    --font-heading: var(--font-sans);
+    --font-sans: 'Inter Variable', sans-serif;
+    --color-sidebar-ring: var(--sidebar-ring);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar: var(--sidebar);
+    --color-chart-5: var(--chart-5);
+    --color-chart-4: var(--chart-4);
+    --color-chart-3: var(--chart-3);
+    --color-chart-2: var(--chart-2);
+    --color-chart-1: var(--chart-1);
+    --color-ring: var(--ring);
+    --color-input: var(--input);
+    --color-border: var(--border);
+    --color-destructive: var(--destructive);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-accent: var(--accent);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-muted: var(--muted);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-secondary: var(--secondary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-primary: var(--primary);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-popover: var(--popover);
+    --color-card-foreground: var(--card-foreground);
+    --color-card: var(--card);
+    --color-foreground: var(--foreground);
+    --color-background: var(--background);
+    --radius-sm: calc(var(--radius) * 0.6);
+    --radius-md: calc(var(--radius) * 0.8);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) * 1.4);
+    --radius-2xl: calc(var(--radius) * 1.8);
+    --radius-3xl: calc(var(--radius) * 2.2);
+    --radius-4xl: calc(var(--radius) * 2.6);
+
+    /* The brand accent. `brand` is a fill; `brand-strong` is the text/link
+       colour that stays readable on the page; `brand-soft` is a quiet tint for
+       selected rows and badges. */
+    --color-brand: var(--brand);
+    --color-brand-strong: var(--brand-strong);
+    --color-brand-soft: var(--brand-soft);
+    --color-brand-foreground: var(--brand-foreground);
+    /* Status colours. Each pair is text-on-tint and is AA on its own tint. */
+    --color-success: var(--success);
+    --color-success-soft: var(--success-soft);
+    --color-warning: var(--warning);
+    --color-warning-soft: var(--warning-soft);
+
+    /* Elevation replaces borders as the main way a surface lifts off the page. */
+    --shadow-xs: var(--elev-xs);
+    --shadow-sm: var(--elev-sm);
+    --shadow-md: var(--elev-md);
+    --shadow-lg: var(--elev-lg);
+
+    --ease-soft: cubic-bezier(0.22, 1, 0.36, 1);
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* .pdf-capture takes the light theme whatever the page is in: the PDF export
+   draws its charts inside it, and a printed page is white. */
+:root, .pdf-capture {
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.145 0.01 255);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.145 0.01 255);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.145 0.01 255);
+    /* Ink with a trace of the logo's navy, not pure black. */
+    --primary: oklch(0.22 0.02 255);
+    --primary-foreground: oklch(0.985 0 0);
+    --secondary: oklch(0.968 0.004 255);
+    --secondary-foreground: oklch(0.22 0.02 255);
+    --muted: oklch(0.968 0.004 255);
+    --muted-foreground: oklch(0.54 0.014 255);
+    --accent: oklch(0.968 0.004 255);
+    --accent-foreground: oklch(0.22 0.02 255);
+    --destructive: oklch(0.577 0.245 27.325);
+    --border: oklch(0.918 0.006 255);
+    --input: oklch(0.918 0.006 255);
+    --ring: #4175B5;
+    --chart-1: #4175B5;
+    --chart-2: #2F5482;
+    --chart-3: #223D5E;
+    --chart-4: #809EC2;
+    --chart-5: #CFE3FA;
+    --radius: 0.625rem;
+    --sidebar: oklch(0.982 0.003 255);
+    --sidebar-foreground: oklch(0.145 0.01 255);
+    --sidebar-primary: #4175B5;
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.955 0.01 255);
+    --sidebar-accent-foreground: oklch(0.22 0.02 255);
+    --sidebar-border: oklch(0.918 0.006 255);
+    --sidebar-ring: #4175B5;
+
+    --brand: #4175B5;
+    --brand-strong: #2F5482;
+    --brand-soft: #EAF1FA;
+    --brand-foreground: #ffffff;
+    --success: #1F7A6D;
+    --success-soft: #E4F4F1;
+    --warning: #86590C;
+    --warning-soft: #FBF3DF;
+
+    --elev-xs: 0 1px 2px 0 rgb(16 24 40 / 0.05);
+    --elev-sm: 0 1px 2px 0 rgb(16 24 40 / 0.05), 0 2px 6px -1px rgb(16 24 40 / 0.06);
+    --elev-md: 0 2px 4px -2px rgb(16 24 40 / 0.06), 0 8px 20px -6px rgb(16 24 40 / 0.10);
+    --elev-lg: 0 4px 6px -4px rgb(16 24 40 / 0.06), 0 20px 40px -12px rgb(16 24 40 / 0.16);
+
+    --dur-fast: 140ms;
+    --dur-base: 220ms;
+    --dur-slow: 380ms;
+}
+
+.dark {
+    --background: oklch(0.15 0.006 255);
+    --foreground: oklch(0.985 0.002 255);
+    --card: oklch(0.2 0.008 255);
+    --card-foreground: oklch(0.985 0.002 255);
+    --popover: oklch(0.2 0.008 255);
+    --popover-foreground: oklch(0.985 0.002 255);
+    --primary: oklch(0.93 0.005 255);
+    --primary-foreground: oklch(0.2 0.01 255);
+    --secondary: oklch(0.27 0.01 255);
+    --secondary-foreground: oklch(0.985 0.002 255);
+    --muted: oklch(0.27 0.01 255);
+    --muted-foreground: oklch(0.72 0.012 255);
+    --accent: oklch(0.27 0.01 255);
+    --accent-foreground: oklch(0.985 0.002 255);
+    --destructive: oklch(0.704 0.191 22.216);
+    --border: oklch(1 0 0 / 10%);
+    --input: oklch(1 0 0 / 15%);
+    --ring: #6FA0D6;
+    --chart-1: #809EC2;
+    --chart-2: #4175B5;
+    --chart-3: #CFE3FA;
+    --chart-4: #2F5482;
+    --chart-5: #223D5E;
+    --sidebar: oklch(0.2 0.008 255);
+    --sidebar-foreground: oklch(0.985 0.002 255);
+    --sidebar-primary: #6FA0D6;
+    --sidebar-primary-foreground: oklch(0.15 0.01 255);
+    --sidebar-accent: oklch(0.27 0.012 255);
+    --sidebar-accent-foreground: oklch(0.985 0.002 255);
+    --sidebar-border: oklch(1 0 0 / 10%);
+    --sidebar-ring: #6FA0D6;
+
+    --brand: #6FA0D6;
+    --brand-strong: #9CC0E6;
+    --brand-soft: rgb(111 160 214 / 0.14);
+    --brand-foreground: #0B1220;
+    --success: #4FC3B2;
+    --success-soft: rgb(79 195 178 / 0.14);
+    --warning: #E8B04A;
+    --warning-soft: rgb(232 176 74 / 0.14);
+
+    /* On a dark page a shadow barely shows, so the surface also gets a hairline
+       light edge. */
+    --elev-xs: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+    --elev-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4), 0 0 0 1px rgb(255 255 255 / 0.04);
+    --elev-md: 0 8px 20px -6px rgb(0 0 0 / 0.55), 0 0 0 1px rgb(255 255 255 / 0.05);
+    --elev-lg: 0 20px 40px -12px rgb(0 0 0 / 0.65), 0 0 0 1px rgb(255 255 255 / 0.06);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    }
+  html,
+  body,
+  #root {
+    height: 100%;
+    overflow: hidden;
+    }
+  body {
+    @apply bg-background text-foreground;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    }
+  html {
+    @apply font-sans;
+    /* Inter's open digits and single-storey a read cleaner in tables and
+       small UI text. */
+    font-feature-settings: "ss01" 1, "cv11" 1;
+    }
+}
+
+/* Thin, self-effacing scrollbar for panes that scroll inside the page.
+   The default Windows scrollbar is a heavy grey slab that reads as a border
+   and competes with real dividers — distracting in a narrow nav column. */
+.scrollbar-slim {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 200ms ease;
+}
+
+.scrollbar-slim:hover,
+.scrollbar-slim:focus-within {
+  scrollbar-color: var(--border) transparent;
+}
+
+.scrollbar-slim::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.scrollbar-slim::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-slim::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 9999px;
+  /* Padding via a transparent border keeps the thumb narrow while leaving a
+     comfortably wide grab target. */
+  border: 3px solid transparent;
+  background-clip: content-box;
+  transition: background-color 200ms ease;
+}
+
+.scrollbar-slim:hover::-webkit-scrollbar-thumb {
+  background-color: color-mix(in oklch, var(--muted-foreground) 35%, transparent);
+}
+
+.scrollbar-slim::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in oklch, var(--muted-foreground) 60%, transparent);
+}
+
+/* Publish success: the ring draws, then the tick lands, then the caption.
+   Sequenced rather than simultaneous — that is what makes it read as a
+   completed transaction instead of a static icon. */
+@keyframes publish-ring {
+  from {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes publish-tick {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.12);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes publish-text {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-publish-ring {
+  animation: publish-ring 520ms ease-out forwards;
+}
+
+.animate-publish-tick {
+  animation: publish-tick 380ms cubic-bezier(0.2, 0.9, 0.3, 1.3) 380ms both;
+}
+
+.animate-publish-text {
+  animation: publish-text 300ms ease-out 620ms both;
+}
+
+/* ------------------------------------------------------------------------ *
+ * Motion. Only transform and opacity animate (cheap, and never reflows the
+ * page). Entrances take --dur-slow, interactions --dur-fast/--dur-base.
+ * Everything here is switched off by the reduced-motion rule at the bottom.
+ * ------------------------------------------------------------------------ */
+
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes fade-in-soft {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes float {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-6px);
+  }
+}
+
+/* A slow drift for the soft colour blobs behind the sign-in panel. */
+@keyframes mesh-drift {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(4%, -3%, 0) scale(1.1);
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* An expanding ring for a "live" status dot. */
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, currentColor 45%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 7px transparent;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+/* For SVG paths given pathLength="1": the line draws itself. */
+@keyframes draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes caret-blink {
+  0%, 49% {
+    opacity: 1;
+  }
+  50%, 100% {
+    opacity: 0;
+  }
+}
+
+@utility animate-reveal {
+  animation: reveal var(--dur-slow) var(--ease-soft) both;
+}
+
+@utility animate-fade-in-soft {
+  animation: fade-in-soft var(--dur-slow) var(--ease-soft) both;
+}
+
+@utility animate-float {
+  animation: float 5s ease-in-out infinite alternate;
+}
+
+@utility animate-mesh {
+  animation: mesh-drift 18s ease-in-out infinite alternate;
+}
+
+@utility animate-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: draw 900ms var(--ease-soft) forwards;
+}
+
+@utility animate-caret {
+  animation: caret-blink 1.1s steps(1) infinite;
+}
+
+@utility pulse-ring {
+  animation: pulse-ring 1.9s var(--ease-soft) infinite;
+}
+
+/* A card that rises a little when pointed at. Pointer devices only, so a touch
+   screen is not left with a stuck "hover". */
+@utility lift {
+  transition:
+    transform var(--dur-base) var(--ease-soft),
+    box-shadow var(--dur-base) var(--ease-soft),
+    border-color var(--dur-base) var(--ease-soft);
+  @media (hover: hover) {
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--elev-md);
+    }
+  }
+}
+
+@utility press {
+  transition: transform var(--dur-fast) var(--ease-soft);
+  &:active {
+    transform: scale(0.98);
+  }
+}
+
+/* A skeleton that shimmers instead of blinking. */
+@utility shimmer {
+  background-color: var(--muted);
+  background-image: linear-gradient(
+    100deg,
+    transparent 30%,
+    color-mix(in oklab, var(--background) 60%, transparent) 50%,
+    transparent 70%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+
+/* A list that enters one item after another. Put `stagger` on the parent; the
+   twelve first children are delayed 45 ms apiece and the rest enter together
+   with the twelfth, so a long list never makes anyone wait. */
+@utility stagger {
+  & > * {
+    animation: reveal var(--dur-slow) var(--ease-soft) both;
+    animation-delay: calc(var(--i, 11) * 45ms);
+  }
+  & > :nth-child(1) { --i: 0; }
+  & > :nth-child(2) { --i: 1; }
+  & > :nth-child(3) { --i: 2; }
+  & > :nth-child(4) { --i: 3; }
+  & > :nth-child(5) { --i: 4; }
+  & > :nth-child(6) { --i: 5; }
+  & > :nth-child(7) { --i: 6; }
+  & > :nth-child(8) { --i: 7; }
+  & > :nth-child(9) { --i: 8; }
+  & > :nth-child(10) { --i: 9; }
+  & > :nth-child(11) { --i: 10; }
+}
+
+/* Reduced motion: whoever asks their system for less movement gets none of the
+   decoration above, and none from the shadcn/Radix open-close animations
+   either. Spinners are the one exception: a frozen spinner would say nothing
+   is happening, and that is information, not decoration. */
+@media (prefers-reduced-motion: reduce) {
+  *:not(.animate-spin),
+  *:not(.animate-spin)::before,
+  *:not(.animate-spin)::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .animate-publish-ring,
+  .animate-publish-tick,
+  .animate-publish-text {
+    animation-duration: 1ms;
+    animation-delay: 0ms;
+  }
+}
+
+/* While the sidebar is being dragged, its width must track the cursor exactly.
+   The width transition exists for the collapse animation; leaving it on turns
+   every pointer move into a 200ms lag behind the handle. */
+body[data-sidebar-resizing] {
+  cursor: col-resize;
+  user-select: none;
+}
+
+body[data-sidebar-resizing] [data-slot="sidebar-gap"],
+body[data-sidebar-resizing] [data-slot="sidebar-container"],
+body[data-sidebar-resizing] [data-slot="sidebar-inset"] {
+  transition: none !important;
+}

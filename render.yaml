@@ -1,0 +1,39 @@
+# Demo deployment (docs/specs/0009-free-demo-deployment.md).
+services:
+  - type: web
+    name: dataalphaone-api
+    runtime: docker
+    plan: free
+    dockerContext: ./backend
+    dockerfilePath: ./docker/backend.Dockerfile
+    healthCheckPath: /health
+    # One worker: SESSION_BACKEND=memory keeps a session in a single process.
+    dockerCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1 --no-proxy-headers
+    envVars:
+      - key: SESSION_BACKEND
+        value: memory
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: COOKIE_SAMESITE
+        value: lax
+      - key: JWT_SECRET
+        generateValue: true
+      # Set these in the Render dashboard (never in this file):
+      - key: FRONTEND_URL        # https://<site>.netlify.app
+        sync: false
+      - key: CORS_ORIGINS        # ["https://<site>.netlify.app"]
+        sync: false
+      - key: TOKEN_ENCRYPTION_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ADMIN_EMAILS
+        sync: false
+      - key: SNOWFLAKE_ACCOUNT
+        sync: false
+      - key: SNOWFLAKE_WAREHOUSE
+        sync: false
+      - key: SNOWFLAKE_DATABASE
+        sync: false
+      - key: SNOWFLAKE_USER
+        sync: false

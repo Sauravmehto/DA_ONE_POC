@@ -1,0 +1,153 @@
+# Portainer / server: pull-only (no build).
+# Requires stack env: DOMAIN=dataalpha.in
+# Requires external Docker network: web (same network Traefik is on)
+#
+# Build & tag locally, then push:
+#   docker compose -f docker-compose.yml build backend frontend
+#   docker compose -f docker-compose.prod.yml push
+#
+# Public URL: https://one.${DOMAIN}
+#   /       → frontend (nginx :80)
+#   /api/*  → backend (:8000)
+
+networks:
+  web:
+    external: true
+
+volumes:
+  # Approved Excel templates and generated reports. WITHOUT this, they live in
+  # the container's own filesystem and vanish on the next redeploy — while the
+  # rows describing them stay behind, so every saved report survives as a
+  # listing that fails to run with "the stored workbook is missing".
+  #
+  # The name is the one the stack already running created, as
+  # <stack>_backend_excel_storage. Calling it anything else here would not
+  # rename it on the server: Compose would find nothing by the new name, make
+  # an empty volume, and mount that — and every template and report would read
+  # as gone while its record stayed behind to point at it.
+  backend_excel_storage:
+
+  # Semantic-layer TOMLs. Mounted by the stack already running, so it is
+  # mounted here, under the name that stack gave it.
+  backend_config:
+
+  # App accounts (APP_DB_PATH). WITHOUT this, every redeploy deletes every
+  # account and everyone's password. It must be a local volume: SQLite's
+  # locking is not safe on a network share. Named outright, not left to the
+  # stack name, so the dev and prod stacks can never share one file.
+  #
+  # New: the stack running today has no such volume, because the code it runs
+  # keeps accounts in the warehouse. It is created on the deploy that first
+  # brings this line, and is empty until then.
+  app_data:
+    name: dataalpha_app_data_prod
+
+services:
+  backend:
+    image: 629143592903.dkr.ecr.us-east-1.amazonaws.com/ai-reporting-be:latest
+    pull_policy: always
+    restart: unless-stopped
+    # Values come from Portainer stack Environment (no .env file in the repo).
+    environment:
+      DEBUG: ${DEBUG:-false}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      FRONTEND_URL: ${FRONTEND_URL}
+      WEBAPP_BASE_URL: ${WEBAPP_BASE_URL}
+      SESSION_BACKEND: ${SESSION_BACKEND:-redis}
+      REDIS_URL: ${REDIS_URL}
+      SNOWFLAKE_ACCOUNT: ${SNOWFLAKE_ACCOUNT}
+      SNOWFLAKE_WAREHOUSE: ${SNOWFLAKE_WAREHOUSE}
+      SNOWFLAKE_DATABASE: ${SNOWFLAKE_DATABASE}
+      SNOWFLAKE_DEFAULT_ROLE: ${SNOWFLAKE_DEFAULT_ROLE}
+      SNOWFLAKE_AVAILABLE_ROLES: ${SNOWFLAKE_AVAILABLE_ROLES}
+      # Snowflake roles allowed into the semantic-layer admin portal.
+      # MUST be declared here, not only in the Portainer stack environment:
+      # stack variables fill in ${...} when the compose file is rendered, but a
+      # container only receives what this block names. Unset means NOBODY is an
+      # admin (a deliberate default), which presents as the Configuration
+      # section vanishing and /admin/semantic returning 403 for every user.
+      ADMIN_ROLES: ${ADMIN_ROLES}
+      OAUTH_CLIENT_ID: ${OAUTH_CLIENT_ID}
+      OAUTH_CLIENT_SECRET: ${OAUTH_CLIENT_SECRET}
+      OAUTH_REDIRECT_URI: ${OAUTH_REDIRECT_URI}
+      JWT_SECRET: ${JWT_SECRET}
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      COOKIE_SAMESITE: ${COOKIE_SAMESITE:-lax}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      DEV_LOGIN_ENABLED: ${DEV_LOGIN_ENABLED:-false}
+      # App accounts, kept in a SQLite file on the app_data volume below. Named
+      # here or the container never receives them.
+      APP_DB_PATH: ${APP_DB_PATH:-/app/data/app.db}
+      SIGNUP_MODE: ${SIGNUP_MODE:-invite}
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
+      # Confirmation, invitation and password-reset emails. With no SMTP_HOST
+      # nothing is sent, so nobody can confirm an email or reset a password.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_SECURITY: ${SMTP_SECURITY:-starttls}
+      # Sign-in abuse limits and who the client IP is. TRUSTED_PROXIES must be
+      # the Docker network the proxies (Traefik, nginx) sit on, as a CIDR: see
+      # `docker network inspect web`. Empty, every request looks like it came from
+      # the proxy and the per-IP limits become one bucket for everyone.
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      PASSWORD_RESET_TTL_MINUTES: ${PASSWORD_RESET_TTL_MINUTES:-30}
+      # Excel reports. `local` keeps templates on the volume below; set to `s3`
+      # with a bucket once one exists. Rows are capped per query — see
+      # MCP_EXCEL_MAX_ROWS in backend/.env.example for the measured cost.
+      EXCEL_STORAGE_BACKEND: ${EXCEL_STORAGE_BACKEND:-local}
+      EXCEL_S3_BUCKET: ${EXCEL_S3_BUCKET:-}
+      EXCEL_S3_PREFIX: ${EXCEL_S3_PREFIX:-}
+      MCP_EXCEL_MAX_ROWS: ${MCP_EXCEL_MAX_ROWS:-25000}
+      # Dashboard panel queries run at once, per dashboard (1-8). 1 = one after
+      # another, the previous behaviour. Named here or the container never
+      # receives it.
+      DASHBOARD_QUERY_CONCURRENCY: ${DASHBOARD_QUERY_CONCURRENCY:-1}
+      # Hosts the Connections page may save a SQL Server connection to.
+      DB_CONNECTION_ALLOWED_HOSTS: ${DB_CONNECTION_ALLOWED_HOSTS:-}
+      # TDS protocol version for SQL Server logins: 7.4 for SQL Server 2012+,
+      # 7.3 for 2008. Unset, the driver guesses and each login can take 16s.
+      SQLSERVER_TDS_VERSION: ${SQLSERVER_TDS_VERSION:-7.4}
+      # Data groups: false files dashboards by group but hides nothing. Turn on
+      # only after backend/sql/data_groups.sql has run and members are added.
+      DATA_GROUPS_ENFORCED: ${DATA_GROUPS_ENFORCED:-false}
+      MCP_DATA_GROUPS_TABLE: ${MCP_DATA_GROUPS_TABLE:-LOAN.PUBLIC.MCP_DATA_GROUPS}
+      MCP_DATA_GROUP_MEMBERS_TABLE: ${MCP_DATA_GROUP_MEMBERS_TABLE:-LOAN.PUBLIC.MCP_DATA_GROUP_MEMBERS}
+      MCP_DATA_GROUP_RESOURCES_TABLE: ${MCP_DATA_GROUP_RESOURCES_TABLE:-LOAN.PUBLIC.MCP_DATA_GROUP_RESOURCES}
+    volumes:
+      - backend_config:/app/config
+      - backend_excel_storage:/app/excel_storage
+      - app_data:/app/data
+    networks:
+      - web
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=web"
+      - "traefik.http.routers.one-api.rule=Host(`one.${DOMAIN}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.one-api.entrypoints=websecure"
+      - "traefik.http.routers.one-api.tls.certresolver=le"
+      - "traefik.http.routers.one-api.middlewares=secure-headers@docker,ratelimit@docker"
+      - "traefik.http.routers.one-api.service=one-api"
+      - "traefik.http.services.one-api.loadbalancer.server.port=8000"
+
+  frontend:
+    image: 629143592903.dkr.ecr.us-east-1.amazonaws.com/ai-reporting-fe:latest
+    pull_policy: always
+    restart: unless-stopped
+    depends_on:
+      - backend
+    networks:
+      - web
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=web"
+      - "traefik.http.routers.one.rule=Host(`one.${DOMAIN}`) && !PathPrefix(`/api`)"
+      - "traefik.http.routers.one.entrypoints=websecure"
+      - "traefik.http.routers.one.tls.certresolver=le"
+      - "traefik.http.routers.one.middlewares=secure-headers@docker,ratelimit@docker"
+      - "traefik.http.routers.one.service=one"
+      - "traefik.http.services.one.loadbalancer.server.port=80"

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0a0a0c" />
+    <title>DataAlphaOne</title>
+    <meta
+      name="description"
+      content="Ask your data a question. Answers, dashboards and reports from your own warehouse."
+    />
+    <!-- Relative, because the deployment hostname is not known at build time.
+         Slack and LinkedIn resolve it against the page; a few older crawlers
+         want an absolute URL and will fall back to no image. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DataAlphaOne" />
+    <meta
+      property="og:description"
+      content="Ask your data a question. Answers, dashboards and reports from your own warehouse."
+    />
+    <meta property="og:image" content="/og-image.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

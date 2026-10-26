@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.env
+
+# Node
+node_modules/
+dist/
+
+# dotenv
+*.env
+!*.env.example
+
+# Credentials — never commit (carried over from the MCP project's gitignore,
+# ahead of porting its code in)
+*.p8
+*.pem
+rsa_key*
+*.key
+
+# Local data / generated artefacts
+audit_log.sqlite3
+excel_storage/
+excel_inbox/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+
+
+# Real client templates, kept locally for measuring the scanner. The workbooks
+# hold live entity names and loan ids; the tests skip when they are absent.
+backend/test_fixtures/templates/*.xlsx
+backend/test_fixtures/templates/*.xlsm
+
+# Local conversation store (file-backed) — never commit chat history
+.conversations/
+.sessions/
+# App accounts (SQLite) — never commit people's accounts or password hashes
+backend/data/
+
+.pnpm-store/
+# Test cache
+.pytest_cache/
