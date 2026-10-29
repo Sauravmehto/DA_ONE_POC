@@ -10,17 +10,22 @@ monthly rent rolls, or a deal folder of mixed documents. Files are grouped into
 datasets by shape, so twelve months of the same report become one queryable set
 rather than twelve unrelated uploads.
 
-Ingestion streams progress because a folder takes tens of seconds. Nothing is
-cached in process memory: workbooks and their databases go to shared storage
-and the definitions go to Snowflake, so a request landing on a different one of
-the four workers behaves identically.
+Reading a folder takes longer than the hosted proxy will hold a connection
+open (spec 0014). The upload request only stores the bytes and a job row;
+the reading runs after the response, and any worker can report the job
+because the row is in the app store. Workbooks and their databases go to
+shared storage, so a request landing on a different one of the four workers
+behaves identically.
 """
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
+import threading
+import time
+import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -34,8 +39,9 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+
+from app.accounts import store
 
 from app.api.access import (
     dataset_access,
@@ -90,9 +96,60 @@ async def _run_engine(request: Request, session: SessionData, fn, *args, **kwarg
     return await run_bound(request, session, fn, *args, **kwargs)
 
 
-def _sse(event: str, data: dict[str, Any]) -> str:
-    """Encode one SSE frame."""
-    return f"event: {event}\ndata: {json.dumps(data, default=str)}\n\n"
+def _job_create(job_id: str, owner: str) -> None:
+    with store.write() as conn:
+        conn.execute(
+            "INSERT INTO upload_jobs "
+            "(job_id, owner, status, percent, stage, created_at) "
+            "VALUES (?, ?, 'running', 0, 'Queued', ?)",
+            (job_id, owner, datetime.now(UTC).isoformat()),
+        )
+
+
+def _job_progress(job_id: str, percent: int, stage: str) -> None:
+    with store.write() as conn:
+        conn.execute(
+            "UPDATE upload_jobs SET percent = ?, stage = ? "
+            "WHERE job_id = ? AND status = 'running'",
+            (percent, stage[:300], job_id),
+        )
+
+
+def _job_finish(job_id: str, result: dict[str, Any]) -> None:
+    with store.write() as conn:
+        conn.execute(
+            "UPDATE upload_jobs SET status = 'complete', percent = 100, "
+            "stage = 'Ready', result_json = ? WHERE job_id = ?",
+            (json.dumps(result, default=str), job_id),
+        )
+
+
+def _job_fail(job_id: str, detail: str) -> None:
+    with store.write() as conn:
+        conn.execute(
+            "UPDATE upload_jobs SET status = 'failed', detail = ? WHERE job_id = ?",
+            (detail[:500], job_id),
+        )
+
+
+def _job_read(job_id: str) -> dict[str, Any] | None:
+    with store.read() as conn:
+        row = conn.execute(
+            "SELECT owner, status, percent, stage, result_json, detail "
+            "FROM upload_jobs WHERE job_id = ?",
+            (job_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    result = json.loads(row["result_json"]) if row["result_json"] else None
+    return {
+        "owner": row["owner"],
+        "status": row["status"],
+        "percent": row["percent"],
+        "stage": row["stage"],
+        "result": result,
+        "detail": row["detail"],
+    }
 
 
 def _is_ignorable(name: str) -> bool:
@@ -202,6 +259,31 @@ async def list_collections(
         if c.owner and c.owner == session.snowflake_user
         and access.allows([("folder", c.collection_id)])
     ]
+
+
+# Declared before /{dataset_id}, which would otherwise match these names.
+@router.get("/ping")
+async def ping(_session: SessionData = Depends(get_current_session)) -> dict[str, bool]:
+    """A cheap request the library sends before an upload.
+
+    The hosted service sleeps, and the first request after that is the one the
+    proxy gives up on. Waking it here means the upload itself is not that
+    request.
+    """
+    return {"ok": True}
+
+
+@router.get("/uploads/{job_id}")
+async def upload_status(
+    job_id: str,
+    session: SessionData = Depends(get_current_session),
+) -> dict[str, Any]:
+    """Where a background upload has got to. Only the person who started it."""
+    job = _job_read(job_id)
+    if job is None or job["owner"] != session.snowflake_user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such upload.")
+    job.pop("owner", None)
+    return job
 
 
 # Declared before /{dataset_id}, which would otherwise match "collections".
@@ -357,21 +439,18 @@ async def upload_files(
     collection_id: str = Form(""),
     session: SessionData = Depends(get_current_session),
     access: data_groups.Access = Depends(get_access),
-) -> StreamingResponse:
+) -> dict[str, Any]:
     """Upload one or many workbooks — typically a whole folder.
 
     Each upload starts a new folder. Pass `collection_id` to add these files to
     an existing one instead — matching shapes join the dataset already there,
     new shapes become new datasets inside it, and documents join its graph.
 
-    Frames:
-        progress  {percent, stage}  — emitted as real work completes
-        complete  the batch result: datasets touched, per-file outcomes
-        failed    {detail}          — ingestion could not finish
-
-    Argument validation happens BEFORE streaming starts, so a bad request still
-    gets a real 4xx. Failures after the first byte arrive as a `failed` frame,
-    because the status line is long gone by then.
+    Returns `{job_id}` as soon as the bytes are stored. Reading them happens
+    afterwards; `GET /uploads/{job_id}` reports progress and the batch result.
+    A bad selection is still a real 4xx, before a job exists. A failure while
+    reading is `status: failed` on the job, because the upload itself already
+    answered.
     """
     # Adding to a folder, or to a dataset inside one, needs sight of it.
     if collection_id:
@@ -419,56 +498,42 @@ async def upload_files(
     # One binding for the whole batch: the signed-in user's own Snowflake if
     # they have connected it, else no warehouse — never the legacy key-pair
     # service account. An upload is written to the app store either way, so
-    # someone without Snowflake can upload (spec 0007).
+    # someone without Snowflake can upload (spec 0007). Captured before the
+    # response, because the reading continues after this request has ended.
     snowflake = await snowflake_binding(request, session)
+    job_id = uuid.uuid4().hex
+    _job_create(job_id, owner)
 
-    async def stream():
-        queue: asyncio.Queue[tuple[str, dict] | None] = asyncio.Queue()
-        loop = asyncio.get_running_loop()
+    def work() -> None:
+        last = {"at": 0.0, "percent": -1}
 
-        def emit(event: str, data: dict) -> None:
-            loop.call_soon_threadsafe(queue.put_nowait, (event, data))
+        def emit(percent: int, stage: str) -> None:
+            now = time.monotonic()
+            if percent == last["percent"] and now - last["at"] < 0.4:
+                return
+            last["at"] = now
+            last["percent"] = percent
+            _job_progress(job_id, percent, stage)
 
-        def work() -> None:
-            try:
-                with snowflake():
-                    result = engine_sources.ingest_files(
-                        payload,
-                        owner=owner,
-                        on_progress=lambda pct, stage: emit(
-                            "progress", {"percent": pct, "stage": stage}
-                        ),
-                        add_to=dataset_id.strip() or None,
-                        add_to_collection=collection_id.strip() or None,
-                    )
-                data = result.as_dict()
-                if skipped:
-                    data["skipped"] = skipped
-                emit("complete", data)
-            except engine_sources.PersistenceUnavailable as exc:
-                # Loud, not silent: an upload that cannot be recorded would
-                # otherwise look successful and then not appear anywhere.
-                log.error("Upload could not be persisted: %s", exc)
-                emit("failed", {"detail": str(exc)})
-            except Exception as exc:
-                log.exception("Ingestion failed")
-                emit("failed", {"detail": f"Could not read these files: {exc}"})
-            finally:
-                loop.call_soon_threadsafe(queue.put_nowait, None)
-
-        task = asyncio.create_task(asyncio.to_thread(work))
         try:
-            while True:
-                item = await queue.get()
-                if item is None:
-                    break
-                event, data = item
-                yield _sse(event, data)
-        finally:
-            await task
+            with snowflake():
+                result = engine_sources.ingest_files(
+                    payload,
+                    owner=owner,
+                    on_progress=emit,
+                    add_to=dataset_id.strip() or None,
+                    add_to_collection=collection_id.strip() or None,
+                )
+            data = result.as_dict()
+            if skipped:
+                data["skipped"] = skipped
+            _job_finish(job_id, data)
+        except engine_sources.PersistenceUnavailable as exc:
+            log.error("Upload could not be persisted: %s", exc)
+            _job_fail(job_id, str(exc))
+        except Exception as exc:
+            log.exception("Ingestion failed")
+            _job_fail(job_id, f"Could not read these files: {exc}")
 
-    return StreamingResponse(
-        stream(),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
+    threading.Thread(target=work, name=f"upload-{job_id[:8]}", daemon=True).start()
+    return {"job_id": job_id}

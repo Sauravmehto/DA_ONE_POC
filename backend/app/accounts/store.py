@@ -476,6 +476,23 @@ MIGRATIONS: list[str] = [
     ALTER TABLE excel_collections ADD COLUMN owner TEXT;
     ALTER TABLE excel_datasets ADD COLUMN owner TEXT;
     """,
+    """
+    -- An upload through the hosted demo (spec 0014). Netlify drops a proxied
+    -- request after about 26 seconds, and Render closes a connection that
+    -- sends nothing for half a minute. The file is accepted, this row tracks
+    -- the reading, and the browser asks for it with short requests instead of
+    -- holding one open for the whole job.
+    CREATE TABLE upload_jobs (
+        job_id       TEXT PRIMARY KEY,
+        owner        TEXT NOT NULL,
+        status       TEXT NOT NULL,
+        percent      INTEGER NOT NULL DEFAULT 0,
+        stage        TEXT NOT NULL DEFAULT '',
+        result_json  TEXT,
+        detail       TEXT,
+        created_at   TEXT NOT NULL
+    );
+    """,
 ]
 
 _ready_for: str | None = None

@@ -932,7 +932,7 @@ export default function ExcelSourcePage() {
 
         {error ? (
           <div className="mt-4 rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm">
-            <p className="font-medium">Could not read these spreadsheets</p>
+            <p className="font-medium">Upload failed</p>
             <p className="mt-1 text-muted-foreground">{error}</p>
           </div>
         ) : null}

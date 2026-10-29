@@ -281,8 +281,11 @@ export async function removeFile(
 }
 
 /**
- * Upload one or many workbooks — typically a whole folder — and stream the
- * ingestion.
+ * Upload one or many workbooks — typically a whole folder.
+ *
+ * The request only hands the bytes over. Reading them continues on the
+ * server, and this waits by asking how far that has got, because the hosted
+ * proxy cuts off a request that stays open.
  *
  * Each upload becomes its own folder, one dataset per shape found in it, so a
  * folder of twelve monthly rent rolls costs ONE model call and lands as one
@@ -295,6 +298,9 @@ export async function uploadFiles(
   onProgress?: (progress: Progress) => void,
   addToCollectionId?: string
 ): Promise<BatchResult> {
+  onProgress?.({ percent: 0, stage: "Connecting" })
+  await wakeServer()
+
   const body = new FormData()
   for (const file of files) {
     // webkitRelativePath keeps the folder the user picked, which is what names
@@ -303,6 +309,7 @@ export async function uploadFiles(
   }
   if (addToCollectionId) body.append("collection_id", addToCollectionId)
 
+  onProgress?.({ percent: 0, stage: "Uploading" })
   const response = await fetch(`${API_BASE}/excel-sources/upload`, {
     method: "POST",
     credentials: "include",
@@ -310,59 +317,77 @@ export async function uploadFiles(
   })
 
   if (!response.ok) {
-    const text = await response.text()
-    let message = text
-    try {
-      const parsed = JSON.parse(text) as { detail?: string }
-      if (parsed.detail) message = parsed.detail
-    } catch {
-      /* not JSON — use the raw text */
-    }
-    throw new Error(message || `Upload failed with status ${response.status}`)
+    throw new Error(uploadFailure(response.status, await response.text()))
   }
-  if (!response.body) throw new Error("The server returned an empty response.")
-
-  const result = await consumeStream<BatchResult>(response.body, onProgress)
-  if (!result) throw new Error("The upload ended without returning a result.")
-  return result
+  const started = (await response.json()) as { job_id?: string }
+  if (!started.job_id) throw new Error("The server did not start the upload.")
+  return waitForUpload(started.job_id, onProgress)
 }
 
-/** Read an SSE stream of progress/complete/failed frames. */
-async function consumeStream<T>(
-  body: ReadableStream<Uint8Array>,
-  onProgress?: (progress: Progress) => void
-): Promise<T | null> {
-  const reader = body.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ""
-  let result: T | null = null
-
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
-
-    let split = buffer.indexOf("\n\n")
-    while (split !== -1) {
-      const frame = buffer.slice(0, split)
-      buffer = buffer.slice(split + 2)
-
-      let event = "message"
-      const dataLines: string[] = []
-      for (const line of frame.split("\n")) {
-        if (line.startsWith("event:")) event = line.slice(6).trim()
-        else if (line.startsWith("data:")) dataLines.push(line.slice(5).trim())
-      }
-
-      if (dataLines.length > 0) {
-        const data = JSON.parse(dataLines.join("\n"))
-        if (event === "progress") onProgress?.(data as Progress)
-        else if (event === "complete") result = data as T
-        else if (event === "failed") throw new Error(data.detail as string)
-      }
-
-      split = buffer.indexOf("\n\n")
-    }
+/** A proxy timeout arrives as an HTML page, not as a message about a file. */
+function uploadFailure(status: number, text: string): string {
+  const html = /<html|inactivity timeout/i.test(text)
+  if (status === 504 || status === 502 || html) {
+    return "The server took too long to answer and the connection was cut. Wait a few seconds and try the upload again."
   }
-  return result
+  try {
+    const parsed = JSON.parse(text) as { detail?: string }
+    if (parsed.detail) return parsed.detail
+  } catch {
+    /* not JSON */
+  }
+  return text || `Upload failed with status ${status}`
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/** The hosted service sleeps. A cheap call wakes it, so the upload is not the request the proxy gives up on. */
+async function wakeServer(): Promise<void> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const response = await fetch(`${API_BASE}/excel-sources/ping`, {
+        credentials: "include",
+      })
+      if (response.ok) return
+    } catch {
+      /* the next attempt is the one that usually lands */
+    }
+    await sleep(2000)
+  }
+}
+
+type UploadJob = {
+  status: "running" | "complete" | "failed"
+  percent: number
+  stage: string
+  result: BatchResult | null
+  detail: string | null
+}
+
+async function waitForUpload(
+  jobId: string,
+  onProgress?: (progress: Progress) => void
+): Promise<BatchResult> {
+  const started = Date.now()
+  while (Date.now() - started < 15 * 60 * 1000) {
+    const response = await fetch(
+      `${API_BASE}/excel-sources/uploads/${encodeURIComponent(jobId)}`,
+      { credentials: "include" }
+    )
+    if (!response.ok) {
+      throw new Error(uploadFailure(response.status, await response.text()))
+    }
+    const job = (await response.json()) as UploadJob
+    onProgress?.({ percent: job.percent, stage: job.stage || "Reading" })
+    if (job.status === "complete" && job.result) return job.result
+    if (job.status === "failed") {
+      throw new Error(job.detail || "Could not read these files.")
+    }
+    await sleep(1000)
+  }
+  throw new Error(
+    "This is taking longer than expected. Refresh the library in a minute to see whether the files arrived."
+  )
 }
