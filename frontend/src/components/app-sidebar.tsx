@@ -13,10 +13,10 @@ import {
 import { useAuth } from "@/contexts/auth-context"
 import { useDatabase } from "@/contexts/database-context"
 import { useWorkspace } from "@/contexts/workspace-context"
-import { ConnectorLogo } from "@/components/connector-logo"
+import { ConnectorLogo, type ConnectorKind } from "@/components/connector-logo"
 import { FolderGlyph } from "@/components/file-type-icon"
 import { accent } from "@/lib/accents"
-import { SHOW_REPORT_BUILDER } from "@/lib/features"
+import { SHOW_CONNECTORS, SHOW_REPORT_BUILDER } from "@/lib/features"
 import { NavConversations } from "@/components/nav-conversations"
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
@@ -100,26 +100,24 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton
-              size="lg"
-              onClick={() => navigate("/")}
-              tooltip="Switch connection"
-              className="group/switch"
-            >
-              <span className="flex size-8 shrink-0 items-center justify-center rounded-md border bg-background">
-                <ConnectorLogo kind={workspace.kind} className="size-5" />
-              </span>
-              <span className="grid min-w-0 flex-1 text-left leading-tight">
-                <span className="truncate text-sm font-semibold">{workspaceName}</span>
-                <span className="truncate text-xs text-muted-foreground">
-                  {workspaceDetail}
-                </span>
-              </span>
-              <ArrowLeftRightIcon
-                className="size-4 shrink-0 text-muted-foreground"
-                aria-label="Switch connection"
-              />
-            </SidebarMenuButton>
+            {SHOW_CONNECTORS ? (
+              <SidebarMenuButton
+                size="lg"
+                onClick={() => navigate("/")}
+                tooltip="Switch connection"
+                className="group/switch"
+              >
+                <WorkspaceIdentity name={workspaceName} detail={workspaceDetail} kind={workspace.kind} />
+                <ArrowLeftRightIcon
+                  className="size-4 shrink-0 text-muted-foreground"
+                  aria-label="Switch connection"
+                />
+              </SidebarMenuButton>
+            ) : (
+              <div className="flex h-12 w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm [&_svg]:size-4 [&_svg]:shrink-0">
+                <WorkspaceIdentity name={workspaceName} detail={workspaceDetail} kind={workspace.kind} />
+              </div>
+            )}
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
@@ -183,5 +181,27 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavUser />
       </SidebarFooter>
     </Sidebar>
+  )
+}
+
+function WorkspaceIdentity({
+  name,
+  detail,
+  kind,
+}: {
+  name: string
+  detail: string
+  kind: ConnectorKind
+}) {
+  return (
+    <>
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-md border bg-background">
+        <ConnectorLogo kind={kind} className="size-5" />
+      </span>
+      <span className="grid min-w-0 flex-1 text-left leading-tight">
+        <span className="truncate text-sm font-semibold">{name}</span>
+        <span className="truncate text-xs text-muted-foreground">{detail}</span>
+      </span>
+    </>
   )
 }

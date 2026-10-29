@@ -1,4 +1,5 @@
 import { DatabaseIcon, ServerIcon } from "lucide-react"
+import { useNavigate } from "react-router-dom"
 
 import { ChatComposer } from "@/components/chat/chat-composer"
 import { ChatSourcePicker } from "@/components/chat/chat-database-picker"
@@ -44,7 +45,8 @@ export function ChatEmptyState({
   onSelectDatabase,
 }: ChatEmptyStateProps) {
   const { chatDatabase } = useChat()
-  const { workspace } = useWorkspace()
+  const { workspace, paths } = useWorkspace()
+  const navigate = useNavigate()
   const {
     databases,
     sqlServerDatabases,
@@ -54,6 +56,17 @@ export function ChatEmptyState({
   } = useDatabase()
 
   const hasDatabase = chatDatabase !== null
+  // On Files, a new chat has no folder yet. The box stays typeable, and
+  // Enter or the send button opens the library instead of sending a message.
+  const sendOpensLibrary = workspace.kind === "files" && !hasDatabase
+
+  function handleSend() {
+    if (sendOpensLibrary) {
+      navigate(paths.library)
+      return
+    }
+    onSend()
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
@@ -66,10 +79,9 @@ export function ChatEmptyState({
           How can I help?
         </h2>
 
-        {/* The source first, then the box you type in: choosing one is a
-            precondition for asking anything. Once chosen, the picker gives way
-            to the choice itself, so the page does not keep asking a question
-            that has already been answered. */}
+        {/* The source first, then the box you type in. On Files, with no
+            folder chosen yet, the box stays open and Enter opens the library.
+            Elsewhere, choosing a source is what enables the box. */}
         <div className={cn(CHAT_COLUMN, "flex flex-col gap-6")}>
           {chatDatabase ? (
             <div className="flex flex-wrap items-center gap-3 rounded-lg border p-3">
@@ -101,15 +113,17 @@ export function ChatEmptyState({
           <ChatComposer
             value={input}
             onChange={onInputChange}
-            onSend={onSend}
+            onSend={handleSend}
             onStop={onStop}
             isLoading={isLoading}
-            canSend={hasDatabase}
-            disabled={!hasDatabase}
+            canSend={hasDatabase || sendOpensLibrary}
+            disabled={!hasDatabase && !sendOpensLibrary}
             placeholder={
               hasDatabase
                 ? `Ask anything about ${chatDatabase.display_name}…`
-                : "Choose a data source above to start…"
+                : sendOpensLibrary
+                  ? "Type a message, then press Enter…"
+                  : "Choose a data source above to start…"
             }
           />
         </div>

@@ -190,13 +190,17 @@ async def list_collections(
     session: SessionData = Depends(get_current_session),
     access: data_groups.Access = Depends(get_access),
 ) -> list[CollectionSummary]:
-    """The library: folders holding the sources built from them."""
+    """The library: folders holding the sources built from them.
+
+    Owner-scoped (spec 0012) before data_groups is even consulted — a folder
+    with no owner on record is left out here too, same as every other route."""
     collections = await _run_engine(
         request, session, engine_sources.list_collections
     )
     return [
         _summarise_collection(c) for c in collections
-        if access.allows([("folder", c.collection_id)])
+        if c.owner and c.owner == session.snowflake_user
+        and access.allows([("folder", c.collection_id)])
     ]
 
 
@@ -371,7 +375,7 @@ async def upload_files(
     """
     # Adding to a folder, or to a dataset inside one, needs sight of it.
     if collection_id:
-        await require_folder(access, collection_id)
+        await require_folder(session, access, collection_id)
     if dataset_id:
         await require_dataset(request, session, access, dataset_id)
 

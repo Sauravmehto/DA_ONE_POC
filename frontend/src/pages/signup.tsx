@@ -11,6 +11,8 @@ import { ResendLink } from "@/components/resend-link"
 import { useAuth } from "@/contexts/auth-context"
 import { signUp } from "@/lib/accounts-api"
 import { fetchAuthCapabilities } from "@/lib/api"
+import { SHOW_CONNECTORS } from "@/lib/features"
+import { FILES_WORKSPACE } from "@/lib/workspace"
 
 export default function SignupPage() {
   const { user, refreshUser } = useAuth()
@@ -19,7 +21,7 @@ export default function SignupPage() {
   const [sentTo, setSentTo] = useState<string | null>(null)
 
   useEffect(() => {
-    if (user) navigate("/", { replace: true })
+    if (user) navigate(SHOW_CONNECTORS ? "/" : FILES_WORKSPACE.base, { replace: true })
   }, [user, navigate])
 
   useEffect(() => {

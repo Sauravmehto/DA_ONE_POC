@@ -20,6 +20,7 @@ import { useDatabase } from "@/contexts/database-context"
 import { useDeleteTarget } from "@/hooks/use-delete-target"
 import { linkSnowflakeUrl } from "@/lib/accounts-api"
 import { userLabel } from "@/lib/api"
+import { SHOW_CONNECTORS } from "@/lib/features"
 import { deleteConnection } from "@/lib/connections-api"
 import { listCollections, type Collection } from "@/lib/excel-source-api"
 import {
@@ -154,38 +155,40 @@ export function ConnectorsPage() {
         />
 
         <ul className="stagger grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {user && !user.snowflake_linked ? (
-            <ConnectorCard
-              kind="snowflake"
-              title="Snowflake"
-              subtitle="Cloud data warehouse"
-              detail="Connect your Snowflake user to query with your own permissions."
-              status="idle"
-              actionLabel="Connect Snowflake"
-              onConnect={() => (window.location.href = linkSnowflakeUrl())}
-            />
-          ) : (
-            <ConnectorCard
-              kind="snowflake"
-              title="Snowflake"
-              subtitle={
-                user?.snowflake_account
-                  ? `Connected as ${user.snowflake_account}`
-                  : "Cloud data warehouse"
-              }
-              detail={
-                warehousesLoading
-                  ? null
-                  : warehouseError
-                    ? "Could not list databases"
-                    : plural(databases.length, "database")
-              }
-              status={warehouseError ? "error" : "connected"}
-              onConnect={() => navigate(SNOWFLAKE_WORKSPACE.base)}
-              onRetry={retry}
-              isRetrying={isRetrying}
-            />
-          )}
+          {SHOW_CONNECTORS ? (
+            user && !user.snowflake_linked ? (
+              <ConnectorCard
+                kind="snowflake"
+                title="Snowflake"
+                subtitle="Cloud data warehouse"
+                detail="Connect your Snowflake user to query with your own permissions."
+                status="idle"
+                actionLabel="Connect Snowflake"
+                onConnect={() => (window.location.href = linkSnowflakeUrl())}
+              />
+            ) : (
+              <ConnectorCard
+                kind="snowflake"
+                title="Snowflake"
+                subtitle={
+                  user?.snowflake_account
+                    ? `Connected as ${user.snowflake_account}`
+                    : "Cloud data warehouse"
+                }
+                detail={
+                  warehousesLoading
+                    ? null
+                    : warehouseError
+                      ? "Could not list databases"
+                      : plural(databases.length, "database")
+                }
+                status={warehouseError ? "error" : "connected"}
+                onConnect={() => navigate(SNOWFLAKE_WORKSPACE.base)}
+                onRetry={retry}
+                isRetrying={isRetrying}
+              />
+            )
+          ) : null}
 
           {connections === null ? (
             <ConnectorCardSkeleton />
@@ -230,7 +233,9 @@ export function ConnectorsPage() {
             onConnect={() => navigate(FILES_WORKSPACE.base)}
           />
 
-          {isAdmin ? <AddConnectionTile onClick={() => setAdding(true)} /> : null}
+          {SHOW_CONNECTORS && isAdmin ? (
+            <AddConnectionTile onClick={() => setAdding(true)} />
+          ) : null}
         </ul>
 
         {!isAdmin && connections !== null && connections.length === 0 ? (

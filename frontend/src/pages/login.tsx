@@ -24,6 +24,8 @@ import { useAuth } from "@/contexts/auth-context"
 import { AccountRequestError, signInWithPassword } from "@/lib/accounts-api"
 import { api, fetchAuthCapabilities, type AuthCapabilities } from "@/lib/api"
 import { availableMethods, type AuthMethod } from "@/lib/auth-methods"
+import { SHOW_CONNECTORS } from "@/lib/features"
+import { FILES_WORKSPACE } from "@/lib/workspace"
 
 const LINK = "font-medium text-foreground underline-offset-4 hover:text-brand-strong hover:underline"
 
@@ -44,7 +46,7 @@ export default function LoginPage() {
   const redirectError = searchParams.get("error")
 
   useEffect(() => {
-    if (user) navigate("/", { replace: true })
+    if (user) navigate(SHOW_CONNECTORS ? "/" : FILES_WORKSPACE.base, { replace: true })
   }, [user, navigate])
 
   useEffect(() => {

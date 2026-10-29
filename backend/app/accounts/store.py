@@ -466,6 +466,16 @@ MIGRATIONS: list[str] = [
         extended_by    TEXT
     );
     """,
+    """
+    -- Whose folder this is (spec 0012). NULL on every row created before this
+    -- migration: that is "no owner recorded yet", not "owned by nobody" —
+    -- backfill_collection_owners.py fills in what it can from the files'
+    -- own uploaded_by, and anything it cannot tell apart stays NULL
+    -- (administrator-only) until claimed. A row written after this migration
+    -- always gets a real owner at creation, so NULL only ever means "old".
+    ALTER TABLE excel_collections ADD COLUMN owner TEXT;
+    ALTER TABLE excel_datasets ADD COLUMN owner TEXT;
+    """,
 ]
 
 _ready_for: str | None = None

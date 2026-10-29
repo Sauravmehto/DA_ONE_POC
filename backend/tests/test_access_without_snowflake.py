@@ -49,12 +49,13 @@ def _plan(title: str) -> dict:
          "y": "c", "color": None, "orientation": "v", "display": "chart"}]}
 
 
-def _dataset(dataset_id: str, folder: str) -> Dataset:
+def _dataset(dataset_id: str, folder: str, owner: str = NYSA) -> Dataset:
     return Dataset(
         dataset_id=dataset_id, name=dataset_id, fingerprint="fp", sheet_count=1,
         tables=[SourceTable(name="T", row_count=1, columns=["C"], sheets=["S"])],
         files=[DatasetFile(filename=f"{dataset_id}.xlsx", row_count=1)],
         database_size=1, created_at="2026-10-01T00:00:00+00:00", collection_id=folder,
+        owner=owner,
     )
 
 

@@ -19,7 +19,8 @@ import DashboardsList from "@/pages/dashboards"
 import DashboardDetail from "@/pages/dashboard-detail"
 import ExcelSourcePage from "@/pages/excel-source"
 import { AdminShell, SnowflakeToolsShell } from "@/components/admin/admin-shell"
-import { SHOW_REPORT_BUILDER } from "@/lib/features"
+import { SHOW_CONNECTORS, SHOW_REPORT_BUILDER } from "@/lib/features"
+import { FILES_WORKSPACE } from "@/lib/workspace"
 import SemanticLayersPage from "@/pages/admin/semantic-layers"
 import SemanticEditorPage from "@/pages/admin/semantic-editor"
 import ReportBuilderPage from "@/pages/admin/report-builder"
@@ -59,8 +60,20 @@ export function App() {
       <Route path="/reset/:token" element={<ResetPage />} />
 
       <Route element={<ProtectedShell />}>
-        {/* Signing in lands here: the connectors, with no app around them. */}
-        <Route index element={<ConnectorsPage />} />
+        {/* With connectors on, signing in lands on the picker. With them
+            off, this deployment's only source is Files, so / goes there
+            and a bookmark to the picker does too. ConnectorsPage stays
+            routed for when the flag is on. */}
+        <Route
+          index
+          element={
+            SHOW_CONNECTORS ? (
+              <ConnectorsPage />
+            ) : (
+              <Navigate to={FILES_WORKSPACE.base} replace />
+            )
+          }
+        />
 
         {/* One workspace per connection. Each has only the pages its source
             supports, and shows only what was made from that source. */}

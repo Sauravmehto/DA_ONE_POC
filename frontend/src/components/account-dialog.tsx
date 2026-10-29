@@ -28,6 +28,7 @@ import {
   unlinkSnowflake,
 } from "@/lib/accounts-api"
 import { userLabel, type AuthUser } from "@/lib/api"
+import { SHOW_CONNECTORS } from "@/lib/features"
 
 export function AccountDialog({
   open,
@@ -107,7 +108,7 @@ function Summary({
 
   const ways = [
     user.has_password ? "Email and password" : null,
-    user.snowflake_account ? "Snowflake" : null,
+    SHOW_CONNECTORS && user.snowflake_account ? "Snowflake" : null,
   ].filter(Boolean)
 
   return (
@@ -153,31 +154,33 @@ function Summary({
 
           <Row label="Signs in with">{ways.length ? ways.join(" · ") : "—"}</Row>
 
-          <Row label="Snowflake">
-            {user.snowflake_account ? (
-              <div className="flex flex-wrap items-center gap-2">
-                <span>
-                  Connected as <span className="font-mono">{user.snowflake_account}</span>
-                </span>
-                {user.has_password ? (
-                  <Button size="sm" variant="outline" className="h-7 text-xs"
-                    disabled={busy !== null} onClick={() => void disconnect()}>
-                    Disconnect
+          {SHOW_CONNECTORS ? (
+            <Row label="Snowflake">
+              {user.snowflake_account ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span>
+                    Connected as <span className="font-mono">{user.snowflake_account}</span>
+                  </span>
+                  {user.has_password ? (
+                    <Button size="sm" variant="outline" className="h-7 text-xs"
+                      disabled={busy !== null} onClick={() => void disconnect()}>
+                      Disconnect
+                    </Button>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-muted-foreground">Not connected</span>
+                  <Button size="sm" className="h-7 text-xs"
+                    onClick={() => (window.location.href = linkSnowflakeUrl())}>
+                    Connect Snowflake
                   </Button>
-                ) : null}
-              </div>
-            ) : (
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-muted-foreground">Not connected</span>
-                <Button size="sm" className="h-7 text-xs"
-                  onClick={() => (window.location.href = linkSnowflakeUrl())}>
-                  Connect Snowflake
-                </Button>
-              </div>
-            )}
-          </Row>
+                </div>
+              )}
+            </Row>
+          ) : null}
 
-          {user.role ? (
+          {SHOW_CONNECTORS && user.role ? (
             <Row label="Snowflake role">
               <span className="font-mono text-xs">{user.role}</span>
             </Row>

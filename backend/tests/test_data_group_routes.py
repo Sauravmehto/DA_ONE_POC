@@ -99,8 +99,8 @@ def client(monkeypatch, session):
         {"report_id": "r-credit", "report_title": "Credit pack", "database": "FINTECH_DB"},
     ])
     monkeypatch.setattr(excel_sources, "list_collections", lambda: [
-        SimpleNamespace(collection_id="credit-folder", name="Credit files"),
-        SimpleNamespace(collection_id="open-folder", name="Open files"),
+        SimpleNamespace(collection_id="credit-folder", name="Credit files", owner="NYSA"),
+        SimpleNamespace(collection_id="open-folder", name="Open files", owner="NYSA"),
     ])
     monkeypatch.setattr(source_routes, "_summarise_collection",
                         lambda c: {"collection_id": c.collection_id, "name": c.name,

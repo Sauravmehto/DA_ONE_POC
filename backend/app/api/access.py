@@ -279,13 +279,33 @@ async def require_report(request: Request, session: SessionData,
         raise not_found("Report not found.")
 
 
-async def require_folder(access: data_groups.Access, collection_id: str) -> None:
+async def require_owned_folder(session: SessionData, collection_id: str) -> None:
+    """A folder is visible to its owner, full stop (spec 0012) — not an
+    administrator, and not data_groups, which this runs ahead of. A folder
+    with no owner on record (made before this existed, or an ambiguous
+    backfill) is visible to nobody here; an administrator claims it
+    elsewhere."""
+    from app.engine import excel_sources
+
+    collection = await asyncio.to_thread(excel_sources.get_collection, collection_id)
+    if collection is None or not collection.owner or collection.owner != session.snowflake_user:
+        raise not_found("No such folder.")
+
+
+async def require_folder(session: SessionData, access: data_groups.Access,
+                         collection_id: str) -> None:
+    await require_owned_folder(session, collection_id)
     if access.filtering and not access.allows([("folder", collection_id)]):
         raise not_found("No such folder.")
 
 
 async def require_dataset(request: Request, session: SessionData,
                           access: data_groups.Access, dataset_id: str) -> None:
+    from app.engine import excel_sources
+
+    dataset = await asyncio.to_thread(excel_sources.get_dataset, dataset_id)
+    if dataset is None or not dataset.owner or dataset.owner != session.snowflake_user:
+        raise not_found("No such dataset.")
     if not access.filtering:
         return
     try:
@@ -349,9 +369,10 @@ async def dataset_access(
 
 async def folder_access(
     collection_id: str,
+    session: SessionData = Depends(get_current_session),
     access: data_groups.Access = Depends(get_access),
 ) -> data_groups.Access:
-    await require_folder(access, collection_id)
+    await require_folder(session, access, collection_id)
     return access
 
 

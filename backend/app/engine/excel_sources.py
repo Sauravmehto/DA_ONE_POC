@@ -180,6 +180,11 @@ class Dataset:
     #: The collection this belongs to. Empty on datasets loaded before
     #: collections existed; those are grouped by their files' folder instead.
     collection_id: str = ""
+    #: Who may see this (spec 0012). "" on a dataset loaded before that
+    #: migration, or recorded in Snowflake before uploads moved to the app
+    #: store — treated as "not recorded", resolved by backfill_collection_owners.py
+    #: where it can be, and admin-only (list_collections) where it can't.
+    owner: str = ""
     tables: list[SourceTable] = field(default_factory=list)
     files: list[DatasetFile] = field(default_factory=list)
     sheet_count: int = 0
@@ -387,6 +392,7 @@ def _save_dataset(dataset: Dataset) -> None:
             "files": [asdict(f) for f in dataset.files],
             "database_size": dataset.database_size,
             "collection_id": dataset.collection_id,
+            "owner": dataset.owner,
             "created_at": dataset.created_at or datetime.now(UTC).isoformat(),
         })
     except Exception as exc:
@@ -416,6 +422,7 @@ def list_datasets() -> list[Dataset]:
             database_size=row["database_size"],
             created_at=row["created_at"], updated_at=row["updated_at"],
             collection_id=row["collection_id"],
+            owner=row["owner"],
         )
         for row in upload_store.list_datasets()
     ]
@@ -608,6 +615,12 @@ class Collection:
     datasets: list[Dataset] = field(default_factory=list)
     created_at: str = ""
     updated_at: str = ""
+    #: Who may see this (spec 0012). Set directly when the row is stored
+    #: (excel_collections.owner), or — for a folder only ever grouped on the
+    #: fly — derived in list_collections() from its datasets' own owner.
+    #: "" means no single owner could be determined: admin-only until an
+    #: administrator assigns one.
+    owner: str = ""
 
     @property
     def is_named(self) -> bool:
@@ -630,14 +643,18 @@ class Collection:
         return (periods[0], periods[-1]) if periods else (None, None)
 
 
-def _collection_names() -> dict[str, tuple[str, str, str]]:
-    """Stored collection names, by id — ours, over any recorded before."""
+def _collection_names() -> dict[str, tuple[str, str, str, str]]:
+    """Stored collection names, by id — ours, over any recorded before.
+    Each value is (name, created_at, updated_at, owner)."""
     names = _collection_names_recorded_before()
     names.update(upload_store.collection_names())
     return names
 
 
-def _collection_names_recorded_before() -> dict[str, tuple[str, str, str]]:
+def _collection_names_recorded_before() -> dict[str, tuple[str, str, str, str]]:
+    """Collections recorded in Snowflake before uploads moved to the app
+    store. No owner column there, so these carry owner="" — list_collections
+    falls back to deriving it from the datasets grouped under them."""
     if not _snowflake_available():
         return {}
     from app.engine.connectors.snowflake import client as snowflake_client
@@ -661,6 +678,7 @@ def _collection_names_recorded_before() -> dict[str, tuple[str, str, str]]:
             row[1],
             row[2].isoformat() if row[2] else "",
             row[3].isoformat() if row[3] else "",
+            "",
         )
         for row in rows
     }
@@ -690,12 +708,13 @@ def list_collections() -> list[Collection]:
 
         collection = groups.get(identity)
         if collection is None:
-            name, created, updated = stored.get(identity, (fallback, "", ""))
+            name, created, updated, owner = stored.get(identity, (fallback, "", "", ""))
             collection = Collection(
                 collection_id=identity,
                 name=name,
                 created_at=created or dataset.created_at,
                 updated_at=updated or dataset.updated_at,
+                owner=owner,
             )
             groups[identity] = collection
             order.append(identity)
@@ -709,7 +728,7 @@ def list_collections() -> list[Collection]:
     # collection with no datasets at all is the rare case.
     from app.engine import collection_documents
 
-    for identity, (name, created, updated) in stored.items():
+    for identity, (name, created, updated, owner) in stored.items():
         if identity in groups:
             continue
         if not collection_documents.list_documents(identity):
@@ -719,9 +738,20 @@ def list_collections() -> list[Collection]:
             continue
         groups[identity] = Collection(
             collection_id=identity, name=name,
-            created_at=created, updated_at=updated,
+            created_at=created, updated_at=updated, owner=owner,
         )
         order.append(identity)
+
+    # A collection with no owner of its own (document-only folders are named
+    # straight off their files and never get one written) inherits one from
+    # its datasets IF they all agree — otherwise it stays "" (spec 0012:
+    # admin-only until claimed, same as a folder recorded before this existed).
+    for collection in groups.values():
+        if collection.owner:
+            continue
+        owners = {d.owner for d in collection.datasets if d.owner}
+        if len(owners) == 1:
+            collection.owner = owners.pop()
 
     return [groups[identity] for identity in order]
 
@@ -792,7 +822,7 @@ def rename_collection(collection_id: str, name: str) -> Collection | None:
             _save_dataset(dataset)
 
     try:
-        _write_collection_name(identity, name)
+        _write_collection_name(identity, name, collection.owner)
     except Exception as exc:
         log.exception("Could not rename collection %s", collection_id)
         raise PersistenceUnavailable(f"Could not rename that folder: {exc}") from exc
@@ -937,7 +967,12 @@ def ingest_files(
                 collection_id, documents, owner, result, report
             )
             if not get_collection(collection_id):
-                _name_documents_only_collection(collection_id, documents)
+                # Joining an existing dataset's folder: that folder's owner,
+                # not the new uploader (spec 0012); otherwise this upload
+                # started the folder, so its uploader owns it.
+                _name_documents_only_collection(
+                    collection_id, documents, (target.owner if target else "") or owner
+                )
             report(100, "Ready")
             return result
 
@@ -977,6 +1012,15 @@ def ingest_files(
             or (target.collection_id if target and target.collection_id else None)
             or new_collection_id()
         )
+        # Whoever is adding files does not thereby gain, or take over, a
+        # folder: the owner stamped on every dataset in it is whoever already
+        # owns the folder being joined, not the new uploader (spec 0012). Only
+        # a brand new folder is owned by the person creating it.
+        collection_owner = (
+            (folder.owner if folder else "")
+            or (target.owner if target else "")
+            or owner
+        )
 
         for shape_index, (fingerprint, items) in enumerate(by_shape.items()):
             base = 30 + int(60 * shape_index / shapes)
@@ -987,14 +1031,14 @@ def ingest_files(
                 fingerprint, items, owner, store, result,
                 lambda pct, stage, _b=base: report(_b + pct, stage),
                 existing=existing, taken=taken, use_folder=shapes == 1,
-                collection_id=collection_id,
+                collection_id=collection_id, collection_owner=collection_owner,
             )
             if dataset is not None:
                 result.datasets.append(dataset)
                 taken.add(dataset.name)
 
         if folder is None and target is None and result.datasets:
-            _name_new_collection(collection_id, prepared, result.datasets)
+            _name_new_collection(collection_id, prepared, result.datasets, collection_owner)
 
         result.collection_id = collection_id
         if documents:
@@ -1007,7 +1051,7 @@ def ingest_files(
 
 
 def _name_new_collection(
-    collection_id: str, items: list[_Prepared], datasets: list[Dataset]
+    collection_id: str, items: list[_Prepared], datasets: list[Dataset], owner: str
 ) -> None:
     """Give a freshly created collection the name of what was uploaded.
 
@@ -1034,7 +1078,7 @@ def _name_new_collection(
         taken = {
             c.name for c in list_collections() if c.collection_id != collection_id
         }
-        _write_collection_name(collection_id, _unique(name, taken))
+        _write_collection_name(collection_id, _unique(name, taken), owner)
     except Exception:
         # A folder with no stored name still groups and still renames; it just
         # shows its datasets' own naming until then. Not worth failing an
@@ -1042,8 +1086,8 @@ def _name_new_collection(
         log.warning("Could not name collection %s", collection_id)
 
 
-def _write_collection_name(collection_id: str, name: str) -> None:
-    upload_store.save_collection_name(collection_id, name)
+def _write_collection_name(collection_id: str, name: str, owner: str = "") -> None:
+    upload_store.save_collection_name(collection_id, name, owner)
 
 
 def get_collection(collection_id: str):
@@ -1084,7 +1128,7 @@ def _ingest_collection_documents(
 
 
 def _name_documents_only_collection(
-    collection_id: str, documents: list[tuple[str, bytes]]
+    collection_id: str, documents: list[tuple[str, bytes]], owner: str = ""
 ) -> None:
     """Name a folder that arrived with no spreadsheets in it."""
     folders = {_folder_of(name) for name, _ in documents}
@@ -1099,7 +1143,7 @@ def _name_documents_only_collection(
         taken = {
             c.name for c in list_collections() if c.collection_id != collection_id
         }
-        _write_collection_name(collection_id, _unique(name, taken))
+        _write_collection_name(collection_id, _unique(name, taken), owner)
     except Exception:
         log.warning("Could not name collection %s", collection_id)
 
@@ -1115,9 +1159,14 @@ def _load_shape(
     taken: set[str] | None = None,
     use_folder: bool = True,
     collection_id: str = "",
+    collection_owner: str = "",
 ) -> Dataset | None:
     """Load every file of one shape into a dataset, new unless one is given."""
     dataset_id = existing.dataset_id if existing else new_dataset_id()
+    # A dataset already in this folder keeps its own owner; a new shape
+    # joining the folder takes the folder's owner, not whoever just uploaded
+    # it (spec 0012) — collection_owner already resolves that in ingest_files.
+    dataset_owner = (existing.owner if existing and existing.owner else "") or collection_owner or owner
 
     # A shape seen before needs no model at all.
     mapping = load_definition(fingerprint)
@@ -1235,6 +1284,7 @@ def _load_shape(
             existing.collection_id if existing and existing.collection_id
             else collection_id
         ),
+        owner=dataset_owner,
         tables=[
             SourceTable(
                 name=t.name, row_count=t.row_count, columns=t.columns,

@@ -28,7 +28,8 @@ from typing import Any
 
 DATASET_COLUMNS = (
     "dataset_id", "dataset_name", "fingerprint", "sheet_count", "tables",
-    "files", "database_size", "collection_id", "created_at", "updated_at",
+    "files", "database_size", "collection_id", "owner", "created_at",
+    "updated_at",
 )
 
 
@@ -61,20 +62,27 @@ def _dataset_row(row) -> dict[str, Any]:
         "files": _loads(row["files"]),
         "database_size": int(row["database_size"] or 0),
         "collection_id": row["collection_id"] or "",
+        #: Who created this dataset (spec 0012). "" on a row written before
+        #: that migration — treated as "not recorded", not "owned by nobody".
+        "owner": row["owner"] or "",
         "created_at": row["created_at"] or "",
         "updated_at": row["updated_at"] or "",
     }
 
 
 def save_dataset(record: dict[str, Any]) -> None:
-    """Write a dataset's current state, replacing any earlier row for it."""
+    """Write a dataset's current state, replacing any earlier row for it.
+
+    owner is written on INSERT only — the ON CONFLICT branch deliberately
+    does not touch it, so appending more files to a dataset never changes who
+    it belongs to (spec 0012)."""
     now = _now()
     with _store().write() as conn:
         conn.execute(
             "INSERT INTO excel_datasets (dataset_id, dataset_name, fingerprint, "
-            "sheet_count, tables, files, database_size, collection_id, "
+            "sheet_count, tables, files, database_size, collection_id, owner, "
             "created_at, updated_at, is_active) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1) "
             "ON CONFLICT (dataset_id) DO UPDATE SET "
             "dataset_name = excluded.dataset_name, fingerprint = excluded.fingerprint, "
             "sheet_count = excluded.sheet_count, tables = excluded.tables, "
@@ -88,6 +96,7 @@ def save_dataset(record: dict[str, Any]) -> None:
                 json.dumps(record.get("files") or []),
                 int(record.get("database_size") or 0),
                 record.get("collection_id") or "",
+                record.get("owner") or None,
                 record.get("created_at") or now, now,
             ),
         )
@@ -123,25 +132,34 @@ def deactivate_dataset(dataset_id: str) -> bool:
 # ── folders ──────────────────────────────────────────────────────────────────
 
 
-def collection_names() -> dict[str, tuple[str, str, str]]:
-    """Stored folder names, by id: (name, created_at, updated_at)."""
+def collection_names() -> dict[str, tuple[str, str, str, str]]:
+    """Stored folder names, by id: (name, created_at, updated_at, owner).
+
+    owner is "" when not recorded (spec 0012) — a collection named before that
+    migration, or one named by promotion (rename_collection) whose datasets
+    themselves carry the real owner (list_collections falls back to that)."""
     with _store().read() as conn:
         rows = conn.execute(
-            "SELECT collection_id, name, created_at, updated_at "
+            "SELECT collection_id, name, created_at, updated_at, owner "
             "FROM excel_collections WHERE is_active = 1"
         ).fetchall()
-    return {r["collection_id"]: (r["name"], r["created_at"], r["updated_at"]) for r in rows}
+    return {
+        r["collection_id"]: (r["name"], r["created_at"], r["updated_at"], r["owner"] or "")
+        for r in rows
+    }
 
 
-def save_collection_name(collection_id: str, name: str) -> None:
+def save_collection_name(collection_id: str, name: str, owner: str = "") -> None:
+    """owner is written on INSERT only (first-writer-wins, like
+    save_dataset's) — a rename later never changes who a folder belongs to."""
     now = _now()
     with _store().write() as conn:
         conn.execute(
-            "INSERT INTO excel_collections (collection_id, name, created_at, "
-            "updated_at, is_active) VALUES (?, ?, ?, ?, 1) "
+            "INSERT INTO excel_collections (collection_id, name, owner, "
+            "created_at, updated_at, is_active) VALUES (?, ?, ?, ?, ?, 1) "
             "ON CONFLICT (collection_id) DO UPDATE SET "
             "name = excluded.name, updated_at = excluded.updated_at, is_active = 1",
-            (collection_id, name, now, now),
+            (collection_id, name, owner or None, now, now),
         )
 
 
